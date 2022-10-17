@@ -1,0 +1,133 @@
+RURAL 
+
+****** Tap=0.93. No voltage constraint. ******
+
+Real power generated: 26.99246686216596MW 
+Immaginary power generated: 10.338290163602979MVar
+
+Real power requested: 25.929023070152677MW
+Immaginary power requested: 8.485081102111153MVar
+
+Real power losses: 1.0634437926491884MW 
+Immaginary power losses: 1.8532090619425359MVar
+
+Flexibility offered: 2.354577274548718MW (For congestion management. Flex_max = 20%, line_loading_max = 80%)
+
+****** Tap=1. Only voltage constraint. No congestion constraint. ******
+
+Real power generated: 29.013130020210834MW 
+Immaginary power generated: 10.954947947457192MVar
+
+Real power requested: 27.56266056457065MW
+Immaginary power requested: 8.455658834411814MVar
+
+Real power losses: 1.4504694556611533MW
+Immaginary power losses: 2.4992891130938517MVar
+
+Flexibility offered: 0.720940444518551MW (For voltage management. Flex_max = 20%, vmin=0.9)
+
+****** Tap=1. Voltage and congestion constraint active. ****** 
+
+Real power generated: 26.965692330616527MW 
+Immaginary power generated: 10.640982168888184MVar
+
+Real power requested: 25.728078803612455MW
+Immaginary power requested: 8.485081094067564MVar
+
+Real power losses: 1.2376135275437719MW
+Immaginary power losses: 2.1559010751548797MVar
+
+Flexibility offered: 2.5555215410750534MW 
+
+
+
+
+SEMI-URBAN
+
+****** Tap=0.958417. No voltage constraint. ******
+
+Real power generated: 74.58227627879425MW 
+Immaginary power generated: 27.42916077514007MVar
+
+Real power requested: 74.00635603601313MW
+Immaginary power requested: 22.336801478216074MVar
+
+Real power losses: 0.5759202277812108MW
+Immaginary power losses: 5.092359289432011MVar
+
+Flexibility offered: 0.44964529043729856MW (For congestion management. Flex_max = 20%, line_loading_max = 80%)
+
+****** Tap=1. Only voltage constraint. No congestion constraint. ******
+
+Real power generated: 75.09768146494157MW
+Immaginary power generated: 27.978167133690302MVar
+
+Real power requested: 74.45600150631343MW
+Immaginary power requested: 22.336801506313513MVar
+
+Real power losses: 0.641679973527232MW
+Immaginary power losses: 5.641365642273286MVar
+
+Flexibility offered: 0MW (For voltage management. Flex_max = 20%, vmin=0.9)
+
+****** Tap=1. Voltage and congestion constraint active. ****** 
+
+Real power generated: 74.63160799796321MW 
+Immaginary power generated: 27.910549466019834MVar
+
+Real power requested: 74.00114565330337MW
+Immaginary power requested: 22.336801478171747MVar
+
+Real power losses: 0.6304623520716746MW
+Immaginary power losses: 5.573747995263602MVar
+
+Flexibility offered: 0.45485567314656916MW 
+
+
+
+
+URBAN
+
+****** Tap=0.95704. No voltage constraint. ******
+
+Real power generated: 59.46649702609379MW 
+Immaginary power generated: 23.658735639989995MVar
+
+Real power requested: 59.04869289211438MW
+Immaginary power requested: 18.74376095991673MVar
+
+Real power losses: 0.417804158355203MW
+Immaginary power losses: 4.914974696157287MVar
+
+Flexibility offered: 3.4305071078856564MW (For congestion management. Flex_max = 20%, line_loading_max = 80%)
+
+****** Tap=1. Only voltage constraint. No congestion constraint. ******
+
+Real power generated: 62.96206071342371MW 
+Immaginary power generated: 24.21557078771391MVar
+
+Real power requested: 62.479201208361225MW
+Immaginary power requested: 18.743761181182496MVar
+
+Real power losses: 0.48285949780800763MW
+Immaginary power losses: 5.471809592241186MVar
+
+Flexibility offered: 0MW (For voltage management. Flex_max = 20%, vmin=0.9)
+
+****** Tap=1. Voltage and congestion constraint active. ****** 
+
+Real power generated: 59.46649702023704MW 
+Immaginary power generated: 23.658735654711002MVar
+
+Real power requested: 59.0486928790123MW
+Immaginary power requested: 18.74376095991673MVar
+
+Real power losses: 0.41780415083607636MW
+Immaginary power losses: 4.914974696021147MVar
+
+Flexibility offered: 3.430507120987698MW 
+
+
+
+
+
