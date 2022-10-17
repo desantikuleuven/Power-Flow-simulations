@@ -9,8 +9,8 @@ import InfrastructureModels; const _IM = InfrastructureModels
 
 include("My_functions.jl")
 
-file_name = "Official_rural_test_dg.m"
-file_path = "C://Users//u0152683//Desktop//Networks//PF simulation//Official_rural_test_dg.m"
+file_name = "Official_rural.m"
+file_path = "C://Workdir//Develop//Official_rural.m"
 net_data = parse_file(file_path)
 
 result = solve_ac_pf(net_data, Ipopt.Optimizer)

@@ -9,7 +9,7 @@ import InfrastructureModels; const _IM = InfrastructureModels
 using DataFrames
 
 #include("My_ref//My_ref_lazy_DGs.jl")
-include("My_ref//My_ref_lazy_ALL.jl")  
+include("My_ref//My_ref_lazy_flex.jl")  
 include("My_functions.jl")
 
 #=
@@ -23,7 +23,7 @@ include("My_functions.jl")
 
 # Input file
 file_name = "Official_rural_test.m"
-file_path = "C://Users//u0152683//Desktop//Networks//PF simulation//Official_rural_test.m"
+file_path = "C://Workdir//Develop//Official_rural.m"
 net_data = parse_file(file_path)
 
 # Add flexibility % that each load can offer

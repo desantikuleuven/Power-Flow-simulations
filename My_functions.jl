@@ -1274,14 +1274,15 @@ function plot_grid_new(net_data::Dict, bus_data_input::String, gen_data_input::S
             
             if gen_data_input == "curtailment"
                 plot1.layer[4]["encoding"]["color"]["legend"]= Dict("orient"=>"bottom-right", "offset"=>-60)
-                plot1.layer[4]["encoding"]["color"]["scale"]["domain"]=[0,net_data["curtailment"]]
+                curt_max = dict_find(net_data, "gen", "curtailment", true, false)
+                plot1.layer[4]["encoding"]["color"]["scale"]["domain"]=[0,curt_max]
                 plot1.layer[4]["encoding"]["color"]["title"]="DG curtailment %"
                 plot1.layer[4]["encoding"]["color"]["scale"]["range"] = ["white","purple"]
                 
-                
             elseif gen_data_input == "pg"
                 plot1.layer[4]["encoding"]["color"]["legend"]= Dict("orient"=>"bottom-right", "offset"=>-60)
-                plot1.layer[4]["encoding"]["color"]["scale"]["domain"]=[0,net_data["pg"]]
+                pg_max, pg_min = dict_find(net_data, "gen", "pg")
+                plot1.layer[4]["encoding"]["color"]["scale"]["domain"]=[0,pg_max]
                 plot1.layer[4]["encoding"]["color"]["title"]="Active power generated (MW)"
                 plot1.layer[4]["encoding"]["color"]["scale"]["range"] = ["white","purple"]
                 #plot1.layer[4]["encoding"]["size"]=Dict("field"=>"GenPower", "title"=>"Gen BaseMW", "type"=>"quantitative", "scale"=>Dict("range"=>[20,100]))
@@ -1474,6 +1475,8 @@ function calc_curtailment(net_data, result)
                 net_data["gen"][i]["curtailment"] = 0
             end
             
+        else
+            net_data["gen"][i]["curtailment"] = 0
         end
     end
     

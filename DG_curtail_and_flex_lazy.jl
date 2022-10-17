@@ -13,7 +13,7 @@ using Random
 
 include("My_ref/My_ref_lazy_DG_curtail.jl")
 include("My_functions.jl")
-include("C:/Users/u0152683/Desktop/Networks/Hosting Capacity/HC_function_curt.jl")
+include("C:/Workdir/Develop/Hosting_Capacity/HC_function_curt.jl")
 
 #Parameters
 
@@ -30,7 +30,7 @@ power_target_per_feeder = 10            # total capacity installed in each feede
 
 # Input file
 file_name = "Official_rural.m"
-file_path = "C://Users//u0152683//Desktop//Networks//PF simulation//Official_rural.m"
+file_path = "C://Workdir//Develop//Official_rural.m"
 net_data = parse_file(file_path)
 
 # Add flexibility % that each load can offer
