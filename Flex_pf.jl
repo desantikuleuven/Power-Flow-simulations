@@ -83,7 +83,8 @@ num = length(filter(x->x>index, branch_loading))
 
 println("\nBranches with loading higher than ", index, "%: ", num)
 
-# Look at finction description in My_functions to see which argument you can pass
-plot_grid(net_data, "flex")
+#Look at function description in My_functions to see which argument you can pass
+#bus, gen, branch
+plot_grid(net_data, "p_flex","basic", "loading"; display_flow = true)
 
 

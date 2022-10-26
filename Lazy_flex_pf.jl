@@ -108,5 +108,5 @@ df = create_df(feeder_ID, result, threshold)
 print(df)
 
 #Look at function description in My_functions to see which argument you can pass
-plot = plot_grid_new(net_data, "p_flex",true)
-
+#bus, gen, branch
+plot_grid(net_data, "p_flex","basic", "loading"; display_flow = true)

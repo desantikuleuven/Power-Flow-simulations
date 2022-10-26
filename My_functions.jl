@@ -2,6 +2,7 @@
 #RELEVANT DATA STORED IN feeder_ID
 
 include("Network_paths.jl")
+using ColorSchemes
 
 #####################################################################################################################
 
@@ -809,6 +810,25 @@ function dict_find(d::Dict, category::String, property::String, max::Bool=true, 
 
 end
 
+function dict_find_new(d::Dict, category::String, property::String, max::Bool=true, min::Bool=true)
+
+    vector = []
+    
+    [push!(vector,get(data,property,0)) for (ID, data) in d[category]]
+
+    if max && min
+        return maximum(vector), minimum(vector)
+
+    elseif max
+        return maximum(vector), nothing
+
+    elseif min
+        return nothing, minimum(vector)
+        
+    end
+
+end
+
 # Find the node/s with maximum PTDF for a certain branch 
 function calc_branch_max_ptdf(net_data::Dict, branch)
 
@@ -1122,292 +1142,216 @@ end
 #####################################################################################################################
 
 
-#Plot network with branch loading, bus_data_input can be either: "flex", "vm"  
-function plot_grid(net_data::Dict, bus_data_input::String, zoom = false)
 
-    #[net_data["branch"][i]["loading"] = round(abs(complex(branch["pt"],branch["qt"]))/branch["rate_a"], digits = 3)*100 for (i,branch) in net_data["branch"]]
 
-    plot1 = powerplot(
-        net_data,
-        width = 750, 
-        height = 750,
-        # bus_data=:vm,
-        # bus_data_type=:quantitative,
-        #gen_data=:pg,
-        #gen_data_type=:quantitative,
-        branch_data = "loading",
-        branch_data_type=:quantitative,
-        bus_data = bus_data_input,
-        bus_data_type = "quantitative",
-        #bus_color = ["#C0C0C0","#000000"],
-        branch_color=["green","orange","red"],
-        #gen_color=["green","orange","red"],
-        gen_color = "purple",
-        branch_size = 2, 
-        bus_size = 50,
-        gen_size = 80,
+#Plot network with branch loading
+# node_attribute can be either: "p_flex",  "q_flex", "vm", "flex_type","basic" 
+# gen_attribute can be either: "pg", "curtailment", "qg", "basic"
+# branch_attribute can be either: "loading", "q_loss", "p_loss", "pt", "basic"
+
+function plot_grid(case::Dict, node_attribute::String, gen_attribute::String, branch_attribute::String; zoom::Bool=false, display_flow::Bool = true, save::Bool = false)
+
+    # copy data for modification by plots
+    data = deepcopy(case)
+
+    # what components to display
+    show_components = ["bus", "branch", "gen"]
+
+    prop_node, prop_gen, prop_br = dict_of_proprieties(node_attribute, gen_attribute, branch_attribute)
+
+    plot = powerplot(data, 
+                    show_flow = display_flow,
+                    components = show_components,
+                    width = 1000, 
+                    height = 1000,
+
+                    branch_data = prop_br[:branch_data],  #branch
+                    branch_data_type = prop_br[:branch_data_type],
+                    branch_size = prop_br[:branch_size],
+                    branch_color = prop_br[:color_range],
+
+                    bus_data = prop_node[:bus_data],  #bus
+                    bus_data_type = prop_node[:bus_data_type],
+                    bus_size = prop_node[:bus_size],
+                    bus_color = prop_node[:color_range],
+
+                    gen_data = prop_gen[:gen_data],  #gen
+                    gen_data_type = prop_gen[:gen_data_type],
+                    gen_size = prop_gen[:gen_size],
+                    gen_color = prop_gen[:color_range]
     )
 
-    #=
-    plot1.layer[4]["transform"] = Dict{String, Any}[
-    Dict("calculate"=>"datum.pg/datum.pmax*100", "as"=>"gen_Percent_Loading"),
-    Dict("calculate"=>"datum.pg", "as"=>"GenPower")
-    ]
-    plot1.layer[4]["encoding"]["color"]["field"]="gen_Percent_Loading"
-    plot1.layer[4]["encoding"]["color"]["scale"]["domain"]=[0,100]
-    plot1.layer[4]["encoding"]["color"]["title"]="Gen Utilization %"
-    plot1.layer[4]["encoding"]["size"]=Dict("field"=>"GenPower", "title"=>"Gen BaseMW", "type"=>"quantitative", "scale"=>Dict("range"=>[20,100]))
-    =#
-
-    # Layer 1 refers to branch data, layer 3 to bus data and layer 4 to generators data. 
-    plot1.layer[1]["encoding"]["color"]["legend"]= Dict("orient"=>"bottom-right", "offset"=>-30)
-    plot1.layer[1]["encoding"]["color"]["title"] = "Branch Utilization %"
-    plot1.layer[1]["encoding"]["color"]["scale"]["domain"]= [0,100]
-
-    if bus_data_input == "flex"
-        plot1.layer[3]["encoding"]["color"]["legend"]= Dict("orient"=>"bottom-right")
-        plot1.layer[3]["encoding"]["color"]["title"]= "Flexibility offered %"
-        #f_max, f_min = dict_find(net_data, "bus", "flex")
-        plot1.layer[3]["encoding"]["color"]["scale"]["domain"]= [0,net_data["flex"]]
-        plot1.layer[3]["encoding"]["color"]["scale"]["range"] = ["#C0C0C0","#000000"]
-
-    elseif bus_data_input == "vm"
-        plot1.layer[3]["encoding"]["color"]["legend"]= Dict("orient"=>"bottom-right")
-        plot1.layer[3]["encoding"]["color"]["title"]= "Voltage magnitude"
-        v_max, v_min = dict_find(net_data, "bus", "vm")
-        plot1.layer[3]["encoding"]["color"]["scale"]["domain"]= [v_min,v_max]
-        plot1.layer[3]["encoding"]["color"]["scale"]["range"] = ["#87CEFA","#00BFFF","#000080"]
-    end
+    # BRANCH
+    if branch_attribute != "basic"
+        #plot.layer[1]["layer"][1]["encoding"]["color"]["field"]="branch_Percent_Loading"
+        plot.layer[1]["layer"][1]["encoding"]["color"]["legend"]= Dict("orient"=>"bottom-right")
+        plot.layer[1]["layer"][1]["encoding"]["color"]["title"]= prop_br[:title]
+        plot.layer[1]["layer"][1]["encoding"]["color"]["scale"]["domain"]= prop_br[:range]
+        plot.layer[1]["layer"][1]["encoding"]["color"]["scale"]["range"] = prop_br[:color_range]
+        #plot.layer[1]["layer"][1]["encoding"]["size"]=Dict("field"=>"BranchPower", "title"=>"Branch BaseMW", "type"=>"quantitative", "scale"=>Dict("range"=>[3,10]))
     
+    end
 
-    #plot1.layer[4]["encoding"]["color"]["legend"]=Dict("orient"=>"bottom-right")
-
-    @set! plot1.resolve.scale.size=:independent
-    @set! plot1.resolve.scale.color=:shared
+    # BUS
+    if !(node_attribute in ["basic", "flex_type"])
+        plot.layer[3]["encoding"]["color"]["legend"]= Dict("orient"=>"bottom-right", "offset" => -30)
+        plot.layer[3]["encoding"]["color"]["title"]= prop_node[:title]
+        plot.layer[3]["encoding"]["color"]["scale"]["domain"]= prop_node[:range]
+        plot.layer[3]["encoding"]["color"]["scale"]["range"] = prop_node[:color_range]
+    end
+        
+    # GEN
+    if gen_attribute != "basic"
+        #plot.layer[4]["encoding"]["color"]["field"]="gen_Percent_Loading"
+        plot.layer[4]["encoding"]["color"]["legend"] = Dict("orient"=>"bottom-right", "offset" => -60)
+        plot.layer[4]["encoding"]["color"]["title"] = prop_gen[:title]
+        plot.layer[4]["encoding"]["color"]["scale"]["domain"] = prop_gen[:range]
+        plot.layer[4]["encoding"]["color"]["scale"]["range"] = prop_gen[:color_range]
+        #plot.layer[4]["encoding"]["size"]=Dict("field"=>"GenPower", "title"=>"Gen BaseMW", "type"=>"quantitative", "scale"=>Dict("range"=>[300,1000]))
+    end
+        
+    @set! plot.resolve.scale.size=:independent
+    #@set! plot.resolve.scale.color=:shared
 
     if zoom
-        PowerPlots.Experimental.add_zoom!(plot1)
+        PowerPlots.Experimental.add_zoom!(plot)
     end
 
-    plot1
+    plot
+
 
 end
 
-#Plot network with branch loading, bus_data_input can be either: "p_flex",  "q_flex", "vm", "basic" 
-# gen_data_input can be either: "pg", "curtailment"
-function plot_grid_new(net_data::Dict, bus_data_input::String, gen_data_input::String="nothing", zoom = false)
+function dict_of_proprieties(node::String, gen::String, branch::String)
+    
+    dict_node = Dict{String, Dict}()
+    dict_gen = Dict{String, Dict}()
+    dict_branch = Dict{String, Dict}()
 
-    if bus_data_input == "basic"
-        plot_grid_basic(net_data,zoom)
-    else
-        if gen_data_input != "nothing"
+    f_p_max, f_p_min = dict_find_new(net_data, "bus", "p_flex")
+    f_q_max, f_q_min = dict_find_new(net_data, "bus", "q_flex")
+    v_max, v_min = dict_find_new(net_data, "bus", "vm")
+    curt_max, min = dict_find_new(net_data, "gen", "curtailment")
+    pg_max, pg_min = dict_find_new(net_data, "gen", "pg")
+    qg_max, qg_min = dict_find_new(net_data, "gen", "qg")
+    b_l_max, b_l_min = dict_find_new(net_data, "branch", "loading")
+    p_loss_max, min = dict_find_new(net_data, "branch", "p_loss")
+    q_loss_max, min= dict_find_new(net_data, "branch", "q_loss")
+    p_f_max = dict_find_new(net_data, "branch", "pf")
 
-            calc_curtailment(net_data, result)
 
-            plot1 = powerplot(
-                net_data,
-                width = 750, 
-                height = 750,
-                # bus_data=:vm,
-                # bus_data_type=:quantitative,
-                #gen_data=:pg,
-                #gen_data_type=:quantitative,
-                branch_data = "loading",
-                branch_data_type=:quantitative,
-                bus_data = bus_data_input,
-                bus_data_type = :quantitative,
-                branch_color=["green","orange","red"],
-                gen_data = gen_data_input,
-                gen_data_type = :quantitative,
-                #gen_color = "purple",
-                branch_size = 3, 
-                bus_size = 110,
-                gen_size = 60,
-                show_flow=true
-            )
-
-            #=
-            plot1.layer[4]["transform"] = Dict{String, Any}[
-            Dict("calculate"=>"datum.pg/datum.pmax*100", "as"=>"gen_Percent_Loading"),
-            Dict("calculate"=>"datum.pg", "as"=>"GenPower")
-            ]
-            plot1.layer[4]["encoding"]["color"]["field"]="gen_Percent_Loading"
-            plot1.layer[4]["encoding"]["color"]["scale"]["domain"]=[0,100]
-            plot1.layer[4]["encoding"]["color"]["title"]="Gen Utilization %"
-            plot1.layer[4]["encoding"]["size"]=Dict("field"=>"GenPower", "title"=>"Gen BaseMW", "type"=>"quantitative", "scale"=>Dict("range"=>[20,100]))
-            =#
-
-            # Layer 1 refers to branch data, layer 3 to bus data and layer 4 to generators data. 
-            plot1.layer[1]["encoding"]["color"]["legend"]= Dict("orient"=>"bottom-right", "offset"=>-30)
-            plot1.layer[1]["encoding"]["color"]["title"] = "Branch Utilization %"
-            plot1.layer[1]["encoding"]["color"]["scale"]["domain"]= [0,100]
-            
-
-            if bus_data_input == "p_flex"
-                plot1.layer[3]["encoding"]["color"]["legend"]= Dict("orient"=>"bottom-right")
-                plot1.layer[3]["encoding"]["color"]["title"]= "P flexibility offered %"
-                #plot1.layer[3]["encoding"]["size"]=Dict("field"=>"p_flex", "type"=>"quantitative", "scale"=>Dict("range"=>[30,100]))
-
-                f_max, f_min = dict_find(net_data, "bus", "p_flex")
-                plot1.layer[3]["encoding"]["color"]["scale"]["domain"]= [f_min,f_max]
-                #plot1.layer[3]["encoding"]["color"]["scale"]["range"] = ["#000080","#DCDCDC", "#000000"]  #blu, bianco, nero
-                plot1.layer[3]["encoding"]["color"]["scale"]["range"] = ["#C0C0C0","#000000"]  #grigio, nero
-                #plot1.layer[3]["encoding"]["color"]["scale"]["range"] = ["8B0000","#F8F8FF","00008B"]
-                #plot1.layer[3]["encoding"]["color"]["scale"]["range"] = ["#87CEFA","#00BFFF","#000080"]
-
-            elseif bus_data_input == "q_flex"
-                plot1.layer[3]["encoding"]["color"]["legend"]= Dict("orient"=>"bottom-right")
-                plot1.layer[3]["encoding"]["color"]["title"]= "Q flexibility offered %"
-                f_max, f_min = dict_find(net_data, "bus", "q_flex")
-                plot1.layer[3]["encoding"]["color"]["scale"]["domain"]= [f_min,f_max]
-                plot1.layer[3]["encoding"]["color"]["scale"]["range"] = ["#000000","#C0C0C0"]
-
-            elseif bus_data_input == "vm"
-                plot1.layer[3]["encoding"]["color"]["legend"]= Dict("orient"=>"bottom-right")
-                plot1.layer[3]["encoding"]["color"]["title"]= "Voltage magnitude"
-                v_max, v_min = dict_find(net_data, "bus", "vm")
-                plot1.layer[3]["encoding"]["color"]["scale"]["domain"]= [0.9,1.1]
-                #plot1.layer[3]["encoding"]["color"]["scale"]["range"] = ["#87CEFA","#00BFFF","#000080"] 
-                #plot1.layer[3]["encoding"]["color"]["scale"]["range"] = ["#B0E0E6","#000080"]
-                plot1.layer[3]["encoding"]["color"]["scale"]["range"] = ["#FFF5EE","#B0E0E6","#000080"]
-            end
-            
-            if gen_data_input == "curtailment"
-                plot1.layer[4]["encoding"]["color"]["legend"]= Dict("orient"=>"bottom-right", "offset"=>-60)
-                curt_max = dict_find(net_data, "gen", "curtailment", true, false)
-                plot1.layer[4]["encoding"]["color"]["scale"]["domain"]=[0,curt_max]
-                plot1.layer[4]["encoding"]["color"]["title"]="DG curtailment %"
-                plot1.layer[4]["encoding"]["color"]["scale"]["range"] = ["white","purple"]
-                
-            elseif gen_data_input == "pg"
-                plot1.layer[4]["encoding"]["color"]["legend"]= Dict("orient"=>"bottom-right", "offset"=>-60)
-                pg_max, pg_min = dict_find(net_data, "gen", "pg")
-                plot1.layer[4]["encoding"]["color"]["scale"]["domain"]=[0,pg_max]
-                plot1.layer[4]["encoding"]["color"]["title"]="Active power generated (MW)"
-                plot1.layer[4]["encoding"]["color"]["scale"]["range"] = ["white","purple"]
-                #plot1.layer[4]["encoding"]["size"]=Dict("field"=>"GenPower", "title"=>"Gen BaseMW", "type"=>"quantitative", "scale"=>Dict("range"=>[20,100]))
-            end
-
-            @set! plot1.resolve.scale.size=:independent
-            @set! plot1.resolve.scale.color=:shared
-
-            if zoom
-                PowerPlots.Experimental.add_zoom!(plot1)
-            end
-
-            #VegaLite.save("C:\\Users\\u0152683\\Desktop\\Networks\\PF simulation\\ciao.pdf", plot1)
-
-            plot1
-        else
-            plot1 = powerplot(
-                net_data,
-                width = 750, 
-                height = 750,
-                # bus_data=:vm,
-                # bus_data_type=:quantitative,
-                #gen_data=:pg,
-                #gen_data_type=:quantitative,
-                branch_data = "loading",
-                branch_data_type=:quantitative,
-                bus_data = bus_data_input,
-                bus_data_type = :quantitative,
-                branch_color=["green","orange","red"],
-                gen_color = "purple",
-                branch_size = 3, 
-                bus_size = 110,
-                gen_size = 60,
-                show_flow=true
-            )
-
-            #=
-            plot1.layer[4]["transform"] = Dict{String, Any}[
-            Dict("calculate"=>"datum.pg/datum.pmax*100", "as"=>"gen_Percent_Loading"),
-            Dict("calculate"=>"datum.pg", "as"=>"GenPower")
-            ]
-            plot1.layer[4]["encoding"]["color"]["field"]="gen_Percent_Loading"
-            plot1.layer[4]["encoding"]["color"]["scale"]["domain"]=[0,100]
-            plot1.layer[4]["encoding"]["color"]["title"]="Gen Utilization %"
-            plot1.layer[4]["encoding"]["size"]=Dict("field"=>"GenPower", "title"=>"Gen BaseMW", "type"=>"quantitative", "scale"=>Dict("range"=>[20,100]))
-            =#
-
-            # Layer 1 refers to branch data, layer 3 to bus data and layer 4 to generators data. 
-            plot1.layer[1]["encoding"]["color"]["legend"]= Dict("orient"=>"bottom-right", "offset"=>-30)
-            plot1.layer[1]["encoding"]["color"]["title"] = "Branch Utilization %"
-            plot1.layer[1]["encoding"]["color"]["scale"]["domain"]= [0,100]
-            
-
-            if bus_data_input == "p_flex"
-                plot1.layer[3]["encoding"]["color"]["legend"]= Dict("orient"=>"bottom-right")
-                plot1.layer[3]["encoding"]["color"]["title"]= "P flexibility offered %"
-                #plot1.layer[3]["encoding"]["size"]=Dict("field"=>"p_flex", "type"=>"quantitative", "scale"=>Dict("range"=>[30,100]))
-
-                f_max, f_min = dict_find(net_data, "bus", "p_flex")
-                plot1.layer[3]["encoding"]["color"]["scale"]["domain"]= [f_min,f_max]
-                #plot1.layer[3]["encoding"]["color"]["scale"]["range"] = ["#000080","#DCDCDC", "#000000"]  #blu, bianco, nero
-                plot1.layer[3]["encoding"]["color"]["scale"]["range"] = ["#C0C0C0","#000000"]  #grigio, nero
-                #plot1.layer[3]["encoding"]["color"]["scale"]["range"] = ["8B0000","#F8F8FF","00008B"]
-                #plot1.layer[3]["encoding"]["color"]["scale"]["range"] = ["#87CEFA","#00BFFF","#000080"]
-
-            elseif bus_data_input == "q_flex"
-                plot1.layer[3]["encoding"]["color"]["legend"]= Dict("orient"=>"bottom-right")
-                plot1.layer[3]["encoding"]["color"]["title"]= "Q flexibility offered %"
-                f_max, f_min = dict_find(net_data, "bus", "q_flex")
-                plot1.layer[3]["encoding"]["color"]["scale"]["domain"]= [f_min,f_max]
-                plot1.layer[3]["encoding"]["color"]["scale"]["range"] = ["#000000","#C0C0C0"]
-
-            elseif bus_data_input == "vm"
-                plot1.layer[3]["encoding"]["color"]["legend"]= Dict("orient"=>"bottom-right")
-                plot1.layer[3]["encoding"]["color"]["title"]= "Voltage magnitude"
-                v_max, v_min = dict_find(net_data, "bus", "vm")
-                plot1.layer[3]["encoding"]["color"]["scale"]["domain"]= [0.9,1.1]
-                #plot1.layer[3]["encoding"]["color"]["scale"]["range"] = ["#87CEFA","#00BFFF","#000080"] 
-                #plot1.layer[3]["encoding"]["color"]["scale"]["range"] = ["#B0E0E6","#000080"]
-                plot1.layer[3]["encoding"]["color"]["scale"]["range"] = ["#FFF5EE","#B0E0E6","#000080"]
-            end
-
-            @set! plot1.resolve.scale.size=:independent
-            @set! plot1.resolve.scale.color=:shared
-
-            if zoom
-                PowerPlots.Experimental.add_zoom!(plot1)
-            end
-
-            #VegaLite.save("C:\\Users\\u0152683\\Desktop\\Networks\\PF simulation\\ciao.pdf", plot1)
-
-            plot1
-        end
-    end
-
-end
-
-function plot_grid_basic(net_data::Dict, zoom)
-    plot1 = powerplot(
-        net_data,
-        show_flow = true,
-        width = 750, 
-        height = 750,
-        branch_data = "loading",
-        branch_data_type=:quantitative,
-        bus_color = "#D3D3D3",
-        branch_color=["green","orange","red"],
-        gen_color = "purple",
-        branch_size = 2, 
-        bus_size = 50,
-        gen_size = 80,
+    # Attributes for nodes (bus)
+    dict_node["p_flex"] = Dict{Symbol, Any}(
+        :bus_size => 90,
+        :bus_data =>"p_flex",
+        :bus_data_type => "quantitative",
+        :range => [f_p_min, f_p_max],
+        :title => "Active DR offered (%)",
+        :color_range => ["#C0C0C0","#000000"]#colorscheme2array(ColorSchemes.colorschemes[:RdYlBu_10]),  #red - blue
+    )
+    dict_node["q_flex"] = Dict{Symbol, Any}(
+        :bus_size => 90,
+        :bus_data => "q_flex",
+        :bus_data_type => "quantitative",
+        :range => [f_q_min,f_q_max],
+        :title => "Reactive DR offered (%)",
+        :color_range => ["#C0C0C0","#000000"]#colorscheme2array(ColorSchemes.colorschemes[:PiYG_10]),  #pink - green
+    )
+    dict_node["vm"] = Dict{Symbol, Any}(
+        :bus_size => 90,
+        :bus_data => "vm",
+        :bus_data_type => "quantitative",
+        #:range => [v_min,v_max],
+        :range => [0.9,1.1],
+        :title => "Voltage Magnitude (p.u.)",
+        :color_range => ["#FFF5EE","#B0E0E6","#000080"],
+    )
+    dict_node["flex_type"] = Dict{Symbol, Any}(
+        :bus_size => 90,
+        :bus_data => "flex_type",
+        :bus_data_type => "nominal",
+    )
+    dict_node["basic"] = Dict{Symbol, Any}(
+        :bus_size => 90,
+        :bus_data => "ComponentType",
+        :bus_data_type => "nominal",
+        :color_range => "#228b22"  #ForestGreen
     )
 
-    plot1.layer[1]["encoding"]["color"]["legend"]= Dict("orient"=>"bottom-right", "offset"=>-30)
-    plot1.layer[1]["encoding"]["color"]["title"] = "Branch Utilization %"
-    plot1.layer[1]["encoding"]["color"]["scale"]["domain"]= [0,100]
+    # Attributes for gen
+    dict_gen["pg"] = Dict{Symbol, Any}(
+        :gen_size => 150,
+        :gen_data => "pg",
+        :gen_data_type => "quantitative",
+        :range => [pg_min,pg_max],
+        :title => "Active power generated (MW)",
+        :color_range => ["white","purple"],
+    )
+    dict_gen["qg"] = Dict{Symbol, Any}(
+        :gen_size => 150,
+        :gen_data => "qg",
+        :gen_data_type => "quantitative",
+        :range => [qg_min,qg_max],
+        :title => "Reactive power generated (MVar)",
+        :color_range => ["white","orange"],
+    )
+    dict_gen["curtailment"] = Dict{Symbol, Any}(
+        :gen_size => 150,
+        :gen_data => "curtailment",
+        :gen_data_type => "quantitative",
+        :range => [0,curt_max],
+        :title => "DG Curtailment (%)",
+        :color_range => colorscheme2array(ColorSchemes.colorschemes[:BuPu_3]),  #white to purple  
+    )
+    dict_gen["basic"] = Dict{Symbol, Any}(
+        :gen_size => 150,
+        :gen_data => "ComponentType",
+        :gen_data_type => "nominal",
+        :color_range => "purple"
+    )
 
-    @set! plot1.resolve.scale.size=:independent
-    @set! plot1.resolve.scale.color=:shared
+    # Attributes for branch
+    dict_branch["loading"] = Dict{Symbol, Any}(
+        :branch_size => 3,
+        :branch_data => "loading",
+        :branch_data_type => "quantitative",
+        :range => [0,b_l_max],
+        :title => "Branch loading (%)",
+        :color_range => ["green","orange","red"],
+    )
+    dict_branch["q_loss"] = Dict{Symbol, Any}(
+        :branch_size => 3,
+        :branch_data => "q_loss",
+        :branch_data_type => "quantitative",
+        :range => [0,q_loss_max],
+        :title => "Q loss (MVar)",
+        :color_range => ["grey","red"],
+    )
+    dict_branch["p_loss"] = Dict{Symbol, Any}(
+        :branch_size => 3,
+        :branch_data => "p_loss",
+        :branch_data_type => "quantitative",
+        :range => [0,p_loss_max],
+        :title => "P loss (MW)",
+        :color_range => ["grey","red"],
+    )
+    dict_branch["pf"] = Dict{Symbol, Any}(
+        :branch_size => 3,
+        :branch_data => "pf",
+        :branch_data_type => "quantitative",
+        :range => [0,p_f_max],
+        :title => "Power Flow (MW)",
+        :color_range => ["green","red"],
+    )
+    dict_branch["basic"] = Dict{Symbol, Any}(
+        :branch_size => 3,
+        :branch_data => "ComponentType",
+        :branch_data_type => "nominal",
+        :color_range => "#87cefa" # lightskyblue #00BFF" #deepSkyBlue
+    )
 
-    if zoom
-        PowerPlots.Experimental.add_zoom!(plot1)
-    end
+    return dict_node[node],dict_gen[gen], dict_branch[branch]
 
-    plot1
 end
 
 #Plot network with colored feeders
@@ -1460,6 +1404,7 @@ function plot_corall_grid(net_data, file_name, path_to_save,zoom = true, save = 
     plot
 end
 
+# Update net_data with curtailment values for each gen
 function calc_curtailment(net_data, result)
 
     for (i, gen) in result["solution"]["gen"]
@@ -1481,8 +1426,6 @@ function calc_curtailment(net_data, result)
     end
     
 end
-
-
 
 
 

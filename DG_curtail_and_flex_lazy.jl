@@ -25,7 +25,7 @@ curtailment = 20                       # DG curtailment %
 size = 2                              # size of generator/s
 seed = 99                              # seed for random DG buses choice
 gen_number_per_feeder = 5             # number of random DGs per feeder
-power_target_per_feeder = 10            # total capacity installed in each feeder
+power_target_per_feeder = 5            # total capacity installed in each feeder
 
 
 # Input file
@@ -74,8 +74,6 @@ update_data!(net_data, result["solution"])
 # Compute flexibility offered by each load 
 flex_loads, p_load, q_load = calc_flexibility_offered_final(net_data, result)
 
-
-
 # Compute curtailment for each generator 
 calc_curtailment(net_data, result)
 
@@ -115,8 +113,8 @@ for (i, gen) in result["solution"]["gen"]
   end
 end
 
-
-
 #Look at function description in My_functions to see which argument you can pass
-#plot = plot_grid_new(net_data, "p_flex","curtailment")
+#bus, gen, branch
+plot_grid(net_data, "p_flex","curtailment", "loading"; display_flow = true)
+
 
