@@ -1,0 +1,3 @@
+Generators present: 
+- Gen 1 (slackbus) P used = 49.1513 MW, Q = 22.2457 MVar at bus 1
+- Gen 2 P installed = 11 MW, Q = 0 MVar at bus 3233

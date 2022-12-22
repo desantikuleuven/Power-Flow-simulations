@@ -66,6 +66,7 @@ function build_pf_all_flex_lazy(pm::AbstractPowerModel)
     end
 
     for i in ids(pm, :load)
+        constraint_load_factor(pm,i)
         constraint_dummy(pm,i) 
     end
 
@@ -263,7 +264,28 @@ function variable_dummy(pm::AbstractPowerModel, nw::Int=nw_id_default, report::B
     var(pm,nw)[:y_q] = JuMP.@variable(pm.model, 0 <= y_q[i in ids(pm, nw, :load)])
     var(pm,nw)[:x_q] = JuMP.@variable(pm.model, 0 <= x_q[i in ids(pm, nw, :load)])
 
+    report && sol_component_value(pm, nw, :load, :x_p, ids(pm, nw, :load), x_p)
+    report && sol_component_value(pm, nw, :load, :x_q, ids(pm, nw, :load), x_q)
+    report && sol_component_value(pm, nw, :load, :y_p, ids(pm, nw, :load), y_p)
+    report && sol_component_value(pm, nw, :load, :y_q, ids(pm, nw, :load), y_q)
+
 end
+
+function constraint_load_factor(pm::AbstractPowerModel, i::Int; nw::Int=nw_id_default)
+    load = ref(pm,nw,:load,i)
+    load_p = get(var(pm, nw), :load_p, Dict())
+    load_q = get(var(pm, nw), :load_q, Dict())
+
+    cosφ = load["pd"]/sqrt(load["pd"]^2+load["qd"]^2)
+    φ = acos(cosφ)
+    tanφ = tan(φ)
+
+    pd = load_p[i]
+    qd = load_q[i]
+
+    @constraint(pm.model, pd*tanφ == qd)
+end
+
 
 function constraint_dummy(pm::AbstractPowerModel, i::Int; nw::Int=nw_id_default)
     

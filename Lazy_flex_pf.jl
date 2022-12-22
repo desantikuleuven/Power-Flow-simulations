@@ -14,7 +14,7 @@ using Random
 #include("My_ref//My_ref_lazy_DGs.jl")
 include("My_ref//My_ref_lazy_flex.jl")  
 include("My_functions.jl")
-include("C:/Workdir/Develop/Hosting_Capacity/HC_function_curt.jl")
+include("C:/Workdir/Develop/Hosting_Capacity/HC_functions.jl")
 
 #=
 
@@ -31,7 +31,7 @@ include("C:/Workdir/Develop/Hosting_Capacity/HC_function_curt.jl")
 flex = 20                              # flexibility offered %
 congestion_limit = 100  	             # congestion limit %
 threshold = 100                        # value used to identify branches with current rating higher than threshold
-curtailment = 0                       # DG curtailment %
+
 
 size = 11                              # size of generator/s
 seed = 99                              # seed for random DG buses choice
@@ -40,7 +40,7 @@ power_target_per_feeder = 10            # total capacity installed in each feede
 
 # Input file
 file_name = "Official_rural.m"
-file_path = "C://Workdir//Develop//Official_rural.m"
+file_path = "C://Workdir//Develop//"*file_name
 net_data = parse_file(file_path)
 
 # Add flexibility % that each load can offer
@@ -56,33 +56,30 @@ update_data!(net_data, cong_cap)
 feeder_ID_1, mv_busbar = get_feeder_data(net_data, file_name)
 
 #Random choice of buses
-
 random_generators = get_random_generators(feeder_ID_1, gen_number_per_feeder, seed)  
 
 # Add new generators
+#add_generators(net_data, random_generators, size)
 
-size_std = power_target_per_feeder/gen_number_per_feeder  #size of each DG
-add_generators(net_data, random_generators, size_std, curtailment/100)
+# Get random generator
+active_node = get_random_DG(seed,net_data)
 
-#= Add a random generator
-Random.seed!(seed)
-passive_nodes = collect(keys(net_data["bus"]))
-deleteat!(passive_nodes, findall(x->x=="1", passive_nodes))
-deleteat!(passive_nodes, findall(x->x=="$mv_busbar", passive_nodes))
-active_node = sample(passive_nodes,1)[1]    # if more than one samples are done, then remove the [1] 
+# Add a random generator
+#add_single_generator(net_data, size, active_node)
 
-add_single_generator(net_data, size, active_node, curtailment/100)
-=#
+# Create dict for DGs (CALL ONLY BEFORE PF)
 gen_ID = get_gen_info(net_data, feeder_ID_1)
 
 # Solve PF 
+model = "build_pf_all_flex_lazy"
 #result = solve_pf_branch_power_cuts_mine(net_data, ACPPowerModel, Ipopt.Optimizer, build_pf_all_flex_lazy)
 result = solve_pf_branch_voltage_cuts_mine(net_data, ACPPowerModel, Ipopt.Optimizer, build_pf_all_flex_lazy)
 update_data!(net_data, result["solution"])
 
+@assert result["termination_status"] == LOCALLY_SOLVED
+
 # Compute flexibility offered by each load 
 flex_loads, p_load, q_load = calc_flexibility_offered_new(net_data, result)
-#flex_loads, p_load, q_load = calc_flexibility_offered(net_data, result)
 
 # Compute branch flows and losses
 
@@ -93,9 +90,8 @@ losses, p_loss, q_loss = calc_power_losses(net_data)
 update_data!(net_data, losses)
 
 # Voltage profile with flexibility 
-
-feeder_ID, path_volt, mv_busbar = calc_voltage_profile(net_data, result, file_name)
-gen_ID = get_gen_info(net_data, feeder_ID)
+save_path =  create_save_path(file_name, gen_ID, model)
+feeder_ID, path_volt, mv_busbar = calc_voltage_profile(net_data, result, file_name, save_path)
 
 # Update net_data with branch loadings 
 calc_branch_loading(net_data, feeder_ID, gen_ID, threshold)

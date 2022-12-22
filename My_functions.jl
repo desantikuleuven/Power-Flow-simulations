@@ -3,6 +3,9 @@
 
 include("Network_paths.jl")
 using ColorSchemes
+using JLD2
+#using FileIO
+using VegaLite
 
 #####################################################################################################################
 
@@ -30,18 +33,13 @@ function add_congestion_capacity(net_data::Dict, cap::Float64)
     return Dict{String,Any}("branch" => congestion_capacity)
 end
 
-# Add generator with curtailment capabilities 
-function add_single_generator(net_data::Dict, size, gen, curt)
+# Insert in net_data the maximum curtailment for each DG
+function add_allowed_curtailment(net_data::Dict, curt::Float64)
 
-    if isa(gen, String)
-        gen = parse(Int64, gen)
-    end
-    
-    i = length(net_data["gen"]) + 1
+    curtailed_gen = Dict{String,Any}()
+    [curtailed_gen[i] = Dict("allowed_curt" => curt) for (i,gen) in net_data["gen"]]
 
-    net_data["gen"]["$i"] = Dict("pg" =>size, "qg" =>0, "pmin" => size * (1-curt), "pmax"=>size, "qmin" =>0, "qmax"=>0, "gen_bus" => gen, "gen_status"=>1, "index" => i, "source_id" => ["gen", i])
-    net_data["bus"]["$gen"]["bus_type"] = 2
-    
+    return Dict{String,Any}("gen" => curtailed_gen)
 end
 
 
@@ -241,9 +239,65 @@ end
 
 #####################################################################################################################
 
+# Funtion needed BEFORE calling calc_voltage_profile if we intend to save the plot
+function create_save_path(file_name, gen_ID, model)
+
+    file = replace(file_name, "Official_"=>"")
+    file = replace(file,".m" =>"")
+    file = uppercasefirst(file)
+
+    models = ["build_pf_dg_curtail", "build_pf_all_flex_lazy", "my_build_pf", "no_flex_with_DG", "build_pf_lazy_DGs", "my_build_pf_DGs", "build_pf_lazy"]
+
+    if model in ["no_flex_with_DG"]
+        model = "no_flex"
+    end
+
+    d = Dict{String, Dict}(i => Dict() for i in models)
+    
+    d["build_pf_dg_curtail"] = Dict{String, Any}(
+        "active"=> Dict{String, String}(
+            "multiple_DGs"=>"Flexible_nodes/W_flexibility/Active/DR_and_DG_curt/"*file*"/Voltage_profile/Multiple_DGs/",
+            "single_DG"=>"Flexible_nodes/W_flexibility/Active/DR_and_DG_curt/"*file*"/Voltage_profile/Single_DG/"
+            ) 
+    )
+    d["build_pf_all_flex_lazy"] = Dict{String, Any}(
+        "active"=> Dict{String, String}(
+            "multiple_DGs"=>"Flexible_nodes/W_flexibility/Active/DR/"*file*"/Voltage_profile/Multiple_DGs/",
+            "single_DG"=>"Flexible_nodes/W_flexibility/Active/DR/"*file*"/Voltage_profile/Single_DG/"
+            ),
+
+        "passive" => "Flexible_nodes/W_flexibility/Passive/DR/"*file*"/Voltage_profile/"
+    )
+    d["no_flex"] = Dict{String, Any}(
+        "active"=> Dict{String, String}(
+            "multiple_DGs"=>"Flexible_nodes/No_flexibility/Active/"*file*"/Voltage_profile/Multiple_DGs/",
+            "single_DG"=>"Flexible_nodes/No_flexibility/Active/"*file*"/Voltage_profile/Single_DG/"
+            ),
+        "passive" => "Flexible_nodes/No_flexibility/Passive/"*file*"/Voltage_profile/"
+    )
+   
+
+    if length(gen_ID) >1
+
+        path = d[model]["active"]["multiple_DGs"]
+
+        return path
+
+    elseif length(gen_ID) == 1
+
+        path = d[model]["active"]["single_DG"]
+    
+        return path
+
+    else  # Passive grid
+        
+        return d[model]["passive"]
+    end
+
+end
 
 # Compute & plot voltage profile of each feeder
-function calc_voltage_profile(net_data::Dict, result::Dict, file_name, do_plot = false, save_fig = false, boundaries = false)
+function calc_voltage_profile(net_data::Dict, result::Dict, file_name::String, save_path::String = "", do_plot::Bool = false, boundaries::Bool = false, save_fig::Bool = false)
    
     # INPUT FOR PATH CALC
 
@@ -389,10 +443,11 @@ function calc_voltage_profile(net_data::Dict, result::Dict, file_name, do_plot =
         mv_busbar = nodes[1]
     end
 
+    # Print part
     for feeder in feeders
 
-        nrows = maximum(extrema(length, values(feeder_ID[feeder]["Paths_distance"])))
-        ncols = length(feeder_ID[feeder]["Paths_distance"])
+        nrows = maximum(extrema(length, values(feeder_ID[feeder]["Paths_distance"])))   # longest path 
+        ncols = length(feeder_ID[feeder]["Paths_distance"])  #number of paths
 
         y = fill(NaN, nrows, ncols)
         x = fill(NaN, nrows, ncols)
@@ -400,17 +455,20 @@ function calc_voltage_profile(net_data::Dict, result::Dict, file_name, do_plot =
         [y[1:length(path_volt[i]),j] = path_volt[i] for (j,i) in enumerate(feeder_ID[feeder]["Paths_ID"])]
         [x[1:length(i),j] = i for (j,i) in enumerate(feeder_ID[feeder]["Paths_distance"])]
         
-        min = minimum(filter(!isnan,y))
-        max = maximum(filter(!isnan,y))
+        vmin = minimum(filter(!isnan,y))
+        vmax = maximum(filter(!isnan,y))
 
-        feeder_ID[feeder]["vmin"] = min
-        feeder_ID[feeder]["vmax"] = max
+        feeder_ID[feeder]["vmin"] = vmin
+        feeder_ID[feeder]["vmax"] = vmax
 
         feeder_ID
 
+        label_min = "v_min "* string(round(vmin, digits = 4)) * "pu"
+        label_max = "v_max "* string(round(vmax, digits = 4)) * "pu"
+
         plot = Plots.plot(x,y; marker=(:circle,4), linewidth = 2, label = "")
-        Plots.plot!([min], color=:black ,seriestype = "hline", linewidth = 3, label = "v_min = $min pu", legend = :bottomleft, left_margin = 5Plots.mm, right_margin = 15Plots.mm)
-        Plots.plot!([max], color=:black ,seriestype = "hline", linewidth = 3, label = "v_max = $max pu", legend = :bottomleft)
+        Plots.plot!([vmin], color=:black ,seriestype = "hline", linewidth = 3, label = label_min, legend = :bottomleft, left_margin = 5Plots.mm, right_margin = 15Plots.mm)
+        Plots.plot!([vmax], color=:black ,seriestype = "hline", linewidth = 3, label = label_max, legend = :bottomleft)
 
         if boundaries
             Plots.plot!([0.9], color=:red ,seriestype = "hline", linewidth = 3, label = "v = 0.9 pu")
@@ -428,23 +486,63 @@ function calc_voltage_profile(net_data::Dict, result::Dict, file_name, do_plot =
 
         if save_fig
 
-            file = replace(file_name, "Official_"=>"")
-            file = replace(file,"_test.m" =>"")
-            file = uppercasefirst(file)
-            
-            Plots.savefig("C:\\Users\\u0152683\\Desktop\\Networks\\PF simulation\\Flexible nodes\\DGs\\Rural\\Voltage profile\\P=14\\$(feeder_ID[feeder]["Name"]).png")
+            Plots.savefig(save_path*"$(feeder_ID[feeder]["Name"]).png")
+
         end
     end
+
+    if save_fig
+        calc_branch_loading(net_data, feeder_ID, Dict(), threshold)  #need it in order to show branch loading property
+        node, gen = check_stuff(net_data)
+
+        p = plot_grid(net_data, node, gen, "loading"; display_flow = false, save_fig = true, save_path = save_path)  # save plot of the situation
+
+        s = ["Generators present: \n"]
+        for (i,data) in net_data["gen"]
+            if i!="1"
+                push!(s,"- Gen $i P installed = "*string(data["p_nominal"])*" MW, Q = "*string(data["q_nominal"])*" MVar at bus "*string(data["gen_bus"])*"\n")
+                if haskey(data, "curtailment")
+                    push!(s,"  Gen $i P used = "*string(data["pg"])*" MW, Q used = "*string(data["qg"])*" MVar (curtailment = "*string(data["curtailment"])*"%) \n\n")
+                end
+
+            else
+                x = "- Gen $i (slackbus) P used = "*string(round(data["pg"], digits = 4))*" MW, Q = "*string(round(data["qg"], digits = 4))*"MVar at bus "*string(data["gen_bus"])*"\n"
+                push!(s,x)
+            end
+            
+        end
+        open(save_path*"Conditions.txt", "w") do file
+            write(file, join(s))
+        end
+    end
+
     
 
     return feeder_ID, path_volt, mv_busbar
 
 end
 
+function check_stuff(net_data)
+
+    is_flex = get(net_data, "flex", -1)  # -1 if is false
+    is_curt = get(net_data, "curtailment", -1)
+
+    if is_flex == -1 && is_curt ==-1
+        return "basic", "basic"
+    elseif is_flex !=-1 && is_curt !=-1
+        return "p_flex", "curtailment"
+    elseif is_flex !=-1 && is_curt == -1
+        return "p_flex", "basic"
+    elseif is_flex ==-1 && is_curt != -1
+        return "basic", "curtailment"
+    end
+
+end
+
 # Computes loading of each branch (adding it to net_data) and updates gen_ID
 function calc_branch_loading(net_data::Dict, feeder_ID::Dict,gen_ID::Dict, congestion_limit)
    
-    [net_data["branch"][i]["loading"] = round(max(abs(complex(branch["pt"],branch["qt"]))/branch["rate_a"],abs(complex(branch["pf"],branch["qf"]))/branch["rate_a"]), digits = 3)*100 for (i,branch) in net_data["branch"]]
+    [net_data["branch"][i]["loading"] = round(max( abs(complex(branch["pt"],branch["qt"]))/branch["rate_a"] , abs(complex(branch["pf"],branch["qf"]))/branch["rate_a"]), digits = 3)*100 for (i,branch) in net_data["branch"]]
     
     congested_lines = []
     for (i,data) in net_data["branch"]
@@ -456,10 +554,12 @@ function calc_branch_loading(net_data::Dict, feeder_ID::Dict,gen_ID::Dict, conge
     for (idx,gen) in gen_ID
 
         branch_load = []
-        ref = gen["ref"]
-    
-        [push!(branch_load,net_data["branch"][i]["loading"]) for i in feeder_ID[ref]["Branches"]]
-    
+        ref = gen["ref"]   #ref number for feeder_ID
+        
+        # Add all branches loading that belong to the same feeder where the gen is connected 
+        [push!(branch_load,net_data["branch"][i]["loading"]) for i in feeder_ID[ref]["Branches"]]  
+        
+        # Save the value of the most critical branch with its loading value 
         max_load, ind_max = findmax(branch_load)
         gen_ID[idx]["max_branch_load"] = max_load
         gen_ID[idx]["Critical_branch"] = feeder_ID[ref]["Branches"][ind_max]
@@ -747,33 +847,6 @@ end
 #####################################################################################################################
 
 
-# relating gen position to feeder
-function get_gen_info(net_data::Dict, feeder_ID::Dict)
-
-    generator_ID = Dict()
-
-    for (j, feeder) in feeder_ID
-
-        for (i,gen) in net_data["gen"]
-            
-            present = false
-
-            for k in feeder["Paths"]
-                if gen["gen_bus"] in k
-                    present = true
-                end
-            end
-
-            if present && gen["gen_bus"]!="1"  #exclude slack generator
-                generator_ID[i] = Dict("ref" => j, "feeder"=> feeder["Name"], "bus"=>gen["gen_bus"])
-            end
-        end
-    end
-
-
-    return generator_ID
-
-end
 
 # Find maximum or min of certain proprieties in a dict (i.e. max voltage etc) 
 function dict_find(d::Dict, category::String, property::String, max::Bool=true, min::Bool=true)
@@ -1017,6 +1090,16 @@ function printing_statements(result, p_load, q_load, p_loss, q_loss, flex_loads,
     [push!(vmin,feeder["vmax"]) for (id, feeder) in feeder_ID ]
     println("\n Highest voltage magnitude in the grid: ", maximum(vmin))
 
+    println()
+
+    for (i, gen) in gen_ID
+        curt = get(gen, "curtailment", 0)
+        
+        if curt > 0
+            println(" Curtailment at gen $i of ", curt , "%\n")
+        end
+    end
+
 end
 
 # Create Dataframe to store data on feeders concerning congestion issues and voltage issues. 
@@ -1149,7 +1232,7 @@ end
 # gen_attribute can be either: "pg", "curtailment", "qg", "basic"
 # branch_attribute can be either: "loading", "q_loss", "p_loss", "pt", "basic"
 
-function plot_grid(case::Dict, node_attribute::String, gen_attribute::String, branch_attribute::String; zoom::Bool=false, display_flow::Bool = true, save::Bool = false)
+function plot_grid(case::Dict, node_attribute::String, gen_attribute::String, branch_attribute::String; zoom::Bool=false, display_flow::Bool = true, save_fig::Bool = false, save_path::String= "")
 
     # copy data for modification by plots
     data = deepcopy(case)
@@ -1161,6 +1244,7 @@ function plot_grid(case::Dict, node_attribute::String, gen_attribute::String, br
 
     plot = powerplot(data, 
                     show_flow = display_flow,
+                    flow_arrow_size_range = [650],
                     components = show_components,
                     width = 1000, 
                     height = 1000,
@@ -1211,14 +1295,21 @@ function plot_grid(case::Dict, node_attribute::String, gen_attribute::String, br
     end
         
     @set! plot.resolve.scale.size=:independent
+    network = uppercasefirst(replace(data["name"],"matpower_"=>""))
+    @set! plot.title = network*" Grid Plot"
     #@set! plot.resolve.scale.color=:shared
 
     if zoom
         PowerPlots.Experimental.add_zoom!(plot)
     end
 
+    if save_fig
+        save(save_path*"Grid_plot.html", plot)
+    end
+
     plot
 
+    return plot
 
 end
 
@@ -1227,6 +1318,10 @@ function dict_of_proprieties(node::String, gen::String, branch::String)
     dict_node = Dict{String, Dict}()
     dict_gen = Dict{String, Dict}()
     dict_branch = Dict{String, Dict}()
+
+    bus_size = 90
+    branch_size = 3
+    gen_size = 170
 
     f_p_max, f_p_min = dict_find_new(net_data, "bus", "p_flex")
     f_q_max, f_q_min = dict_find_new(net_data, "bus", "q_flex")
@@ -1241,24 +1336,65 @@ function dict_of_proprieties(node::String, gen::String, branch::String)
 
 
     # Attributes for nodes (bus)
-    dict_node["p_flex"] = Dict{Symbol, Any}(
-        :bus_size => 90,
-        :bus_data =>"p_flex",
-        :bus_data_type => "quantitative",
-        :range => [f_p_min, f_p_max],
-        :title => "Active DR offered (%)",
-        :color_range => ["#C0C0C0","#000000"]#colorscheme2array(ColorSchemes.colorschemes[:RdYlBu_10]),  #red - blue
-    )
-    dict_node["q_flex"] = Dict{Symbol, Any}(
-        :bus_size => 90,
-        :bus_data => "q_flex",
-        :bus_data_type => "quantitative",
-        :range => [f_q_min,f_q_max],
-        :title => "Reactive DR offered (%)",
-        :color_range => ["#C0C0C0","#000000"]#colorscheme2array(ColorSchemes.colorschemes[:PiYG_10]),  #pink - green
-    )
+    if f_p_min >=0
+        dict_node["p_flex"] = Dict{Symbol, Any}(
+            :bus_size => bus_size,
+            :bus_data =>"p_flex",
+            :bus_data_type => "quantitative",
+            :range => [f_p_min, f_p_max],
+            :title => "Active DR offered (%)",
+            :color_range => ["#C0C0C0","#000000"] #grey-black     
+        )
+    elseif f_p_max <=0
+        dict_node["p_flex"] = Dict{Symbol, Any}(
+            :bus_size => bus_size,
+            :bus_data =>"p_flex",
+            :bus_data_type => "quantitative",
+            :range => [f_p_min, f_p_max],
+            :title => "Active DR offered (%)",
+            :color_range => ["#000000","#C0C0C0"] #black - grey        
+        )
+    elseif f_p_min <0 && f_p_max >0
+        dict_node["p_flex"] = Dict{Symbol, Any}(
+            :bus_size => bus_size,
+            :bus_data =>"p_flex",
+            :bus_data_type => "quantitative",
+            :range => [f_p_min, f_p_max],
+            :title => "Active DR offered (%)",
+            :color_range => colorscheme2array(ColorSchemes.colorschemes[:RdYlBu_10]) #red - blue       
+        )
+    end
+    
+    if f_q_min >=0
+        dict_node["q_flex"] = Dict{Symbol, Any}(
+            :bus_size => bus_size,
+            :bus_data =>"q_flex",
+            :bus_data_type => "quantitative",
+            :range => [f_q_min, f_q_max],
+            :title => "Reactive DR offered (%)",
+            :color_range => ["#C0C0C0","#000000"] #grey-black      
+        )
+    elseif f_q_max <=0
+        dict_node["q_flex"] = Dict{Symbol, Any}(
+            :bus_size => bus_size,
+            :bus_data =>"q_flex",
+            :bus_data_type => "quantitative",
+            :range => [f_q_min, f_q_max],
+            :title => "Reactive DR offered (%)",
+            :color_range => ["#000000","#C0C0C0"] #black - grey        
+        )
+    elseif f_q_min <0 && f_p_max >0
+        dict_node["q_flex"] = Dict{Symbol, Any}(
+            :bus_size => bus_size,
+            :bus_data =>"q_flex",
+            :bus_data_type => "quantitative",
+            :range => [f_q_min, f_q_max],
+            :title => "Reactive DR offered (%)",
+            :color_range => colorscheme2array(ColorSchemes.colorschemes[:PiYG_10]),  #pink - green       
+        )
+    end
     dict_node["vm"] = Dict{Symbol, Any}(
-        :bus_size => 90,
+        :bus_size => bus_size,
         :bus_data => "vm",
         :bus_data_type => "quantitative",
         #:range => [v_min,v_max],
@@ -1267,20 +1403,20 @@ function dict_of_proprieties(node::String, gen::String, branch::String)
         :color_range => ["#FFF5EE","#B0E0E6","#000080"],
     )
     dict_node["flex_type"] = Dict{Symbol, Any}(
-        :bus_size => 90,
+        :bus_size => bus_size,
         :bus_data => "flex_type",
         :bus_data_type => "nominal",
     )
     dict_node["basic"] = Dict{Symbol, Any}(
-        :bus_size => 90,
+        :bus_size => bus_size,
         :bus_data => "ComponentType",
         :bus_data_type => "nominal",
-        :color_range => "#228b22"  #ForestGreen
+        :color_range => "#C0C0C0" #"#228b22"  #ForestGreen
     )
 
     # Attributes for gen
     dict_gen["pg"] = Dict{Symbol, Any}(
-        :gen_size => 150,
+        :gen_size => gen_size,
         :gen_data => "pg",
         :gen_data_type => "quantitative",
         :range => [pg_min,pg_max],
@@ -1288,7 +1424,7 @@ function dict_of_proprieties(node::String, gen::String, branch::String)
         :color_range => ["white","purple"],
     )
     dict_gen["qg"] = Dict{Symbol, Any}(
-        :gen_size => 150,
+        :gen_size => gen_size,
         :gen_data => "qg",
         :gen_data_type => "quantitative",
         :range => [qg_min,qg_max],
@@ -1296,7 +1432,7 @@ function dict_of_proprieties(node::String, gen::String, branch::String)
         :color_range => ["white","orange"],
     )
     dict_gen["curtailment"] = Dict{Symbol, Any}(
-        :gen_size => 150,
+        :gen_size => gen_size,
         :gen_data => "curtailment",
         :gen_data_type => "quantitative",
         :range => [0,curt_max],
@@ -1304,7 +1440,7 @@ function dict_of_proprieties(node::String, gen::String, branch::String)
         :color_range => colorscheme2array(ColorSchemes.colorschemes[:BuPu_3]),  #white to purple  
     )
     dict_gen["basic"] = Dict{Symbol, Any}(
-        :gen_size => 150,
+        :gen_size => gen_size,
         :gen_data => "ComponentType",
         :gen_data_type => "nominal",
         :color_range => "purple"
@@ -1312,7 +1448,7 @@ function dict_of_proprieties(node::String, gen::String, branch::String)
 
     # Attributes for branch
     dict_branch["loading"] = Dict{Symbol, Any}(
-        :branch_size => 3,
+        :branch_size => branch_size,
         :branch_data => "loading",
         :branch_data_type => "quantitative",
         :range => [0,b_l_max],
@@ -1320,7 +1456,7 @@ function dict_of_proprieties(node::String, gen::String, branch::String)
         :color_range => ["green","orange","red"],
     )
     dict_branch["q_loss"] = Dict{Symbol, Any}(
-        :branch_size => 3,
+        :branch_size => branch_size,
         :branch_data => "q_loss",
         :branch_data_type => "quantitative",
         :range => [0,q_loss_max],
@@ -1328,7 +1464,7 @@ function dict_of_proprieties(node::String, gen::String, branch::String)
         :color_range => ["grey","red"],
     )
     dict_branch["p_loss"] = Dict{Symbol, Any}(
-        :branch_size => 3,
+        :branch_size => branch_size,
         :branch_data => "p_loss",
         :branch_data_type => "quantitative",
         :range => [0,p_loss_max],
@@ -1336,7 +1472,7 @@ function dict_of_proprieties(node::String, gen::String, branch::String)
         :color_range => ["grey","red"],
     )
     dict_branch["pf"] = Dict{Symbol, Any}(
-        :branch_size => 3,
+        :branch_size => branch_size,
         :branch_data => "pf",
         :branch_data_type => "quantitative",
         :range => [0,p_f_max],
@@ -1344,7 +1480,7 @@ function dict_of_proprieties(node::String, gen::String, branch::String)
         :color_range => ["green","red"],
     )
     dict_branch["basic"] = Dict{Symbol, Any}(
-        :branch_size => 3,
+        :branch_size => branch_size,
         :branch_data => "ComponentType",
         :branch_data_type => "nominal",
         :color_range => "#87cefa" # lightskyblue #00BFF" #deepSkyBlue
@@ -1410,7 +1546,7 @@ function calc_curtailment(net_data, result)
     for (i, gen) in result["solution"]["gen"]
 
         if i!="1"
-            p_nominal = net_data["gen"][i]["pmax"]
+            p_nominal = net_data["gen"][i]["p_nominal"]
             p_final = gen["pg"]
             curtail = p_nominal - p_final
         

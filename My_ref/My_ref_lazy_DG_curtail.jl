@@ -33,6 +33,7 @@ function build_pf_dg_curtail(pm::AbstractPowerModel)
 
     constraint_model_voltage(pm)  #do nothing
 
+
     for (i,bus) in ref(pm, :ref_buses)
         @assert bus["bus_type"] == 3
 
@@ -51,6 +52,7 @@ function build_pf_dg_curtail(pm::AbstractPowerModel)
     end
 
     for i in ids(pm, :load)
+        constraint_load_factor(pm,i)
         constraint_dummy(pm,i) 
     end
 
@@ -214,6 +216,7 @@ function constraint_thermal_limit_from_me(pm::AbstractPowerModel, i::Int; nw::In
     end
 end
 
+
 function constraint_thermal_limit_to_me(pm::AbstractPowerModel, i::Int; nw::Int=nw_id_default)
     branch = ref(pm, nw, :branch, i)
     f_bus = branch["f_bus"]
@@ -280,6 +283,22 @@ function constraint_dummy(pm::AbstractPowerModel, i::Int; nw::Int=nw_id_default)
     JuMP.@constraint(pm.model, q - q_flex <= y_q[i])
     JuMP.@constraint(pm.model, q_flex - q <= x_q[i])
 end
+
+function constraint_load_factor(pm::AbstractPowerModel, i::Int; nw::Int=nw_id_default)
+    load = ref(pm,nw,:load,i)
+    load_p = get(var(pm, nw), :load_p, Dict())
+    load_q = get(var(pm, nw), :load_q, Dict())
+
+    cosφ = load["pd"]/sqrt(load["pd"]^2+load["qd"]^2)
+    φ = acos(cosφ)
+    tanφ = tan(φ)
+
+    pd = load_p[i]
+    qd = load_q[i]
+
+    @constraint(pm.model, pd*tanφ == qd)
+end
+
 
 function variable_gen_power_me(pm::AbstractPowerModel; kwargs...)
     variable_gen_power_real_me(pm; kwargs...)
