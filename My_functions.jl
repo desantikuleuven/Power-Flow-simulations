@@ -1230,7 +1230,7 @@ end
 #Plot network with branch loading
 # node_attribute can be either: "p_flex",  "q_flex", "vm", "flex_type","basic" 
 # gen_attribute can be either: "pg", "curtailment", "qg", "basic"
-# branch_attribute can be either: "loading", "q_loss", "p_loss", "pt", "basic"
+# branch_attribute can be either: "loading", "q_loss", "p_loss", "pt", "rank", "basic"
 
 function plot_grid(case::Dict, node_attribute::String, gen_attribute::String, branch_attribute::String; zoom::Bool=false, display_flow::Bool = true, save_fig::Bool = false, save_path::String= "")
 
@@ -1240,7 +1240,7 @@ function plot_grid(case::Dict, node_attribute::String, gen_attribute::String, br
     # what components to display
     show_components = ["bus", "branch", "gen"]
 
-    prop_node, prop_gen, prop_br = dict_of_proprieties(node_attribute, gen_attribute, branch_attribute)
+    prop_node, prop_gen, prop_br = dict_of_proprieties(case,node_attribute, gen_attribute, branch_attribute)
 
     plot = powerplot(data, 
                     show_flow = display_flow,
@@ -1266,7 +1266,7 @@ function plot_grid(case::Dict, node_attribute::String, gen_attribute::String, br
     )
 
     # BRANCH
-    if branch_attribute != "basic"
+    if !(branch_attribute in ["basic","rank"])
         #plot.layer[1]["layer"][1]["encoding"]["color"]["field"]="branch_Percent_Loading"
         plot.layer[1]["layer"][1]["encoding"]["color"]["legend"]= Dict("orient"=>"bottom-right")
         plot.layer[1]["layer"][1]["encoding"]["color"]["title"]= prop_br[:title]
@@ -1308,12 +1308,13 @@ function plot_grid(case::Dict, node_attribute::String, gen_attribute::String, br
     end
 
     plot
+    @show plot
 
     return plot
 
 end
 
-function dict_of_proprieties(node::String, gen::String, branch::String)
+function dict_of_proprieties(net_data::Dict, node::String, gen::String, branch::String)
     
     dict_node = Dict{String, Dict}()
     dict_gen = Dict{String, Dict}()
@@ -1333,6 +1334,15 @@ function dict_of_proprieties(node::String, gen::String, branch::String)
     p_loss_max, min = dict_find_new(net_data, "branch", "p_loss")
     q_loss_max, min= dict_find_new(net_data, "branch", "q_loss")
     p_f_max = dict_find_new(net_data, "branch", "pf")
+
+    rank_col_range = Vector{String}()
+    if length(filter(x-> haskey(last(x), "rank"), net_data["branch"])) != 0
+        [push!(rank_col_range,i["rank"]) for (idx,i) in net_data["branch"] if !(i["rank"] in rank_col_range)]
+
+        if length(rank_col_range)>2  # done so that colors are in order
+            rank_col_range = ["green", "orange", "red"]
+        end
+    end
 
 
     # Attributes for nodes (bus)
@@ -1479,6 +1489,12 @@ function dict_of_proprieties(node::String, gen::String, branch::String)
         :title => "Power Flow (MW)",
         :color_range => ["green","red"],
     )
+    dict_branch["rank"] = Dict{Symbol, Any}(
+        :branch_size => branch_size,
+        :branch_data => "rank",
+        :branch_data_type => "nominal",
+        :color_range => rank_col_range 
+    )
     dict_branch["basic"] = Dict{Symbol, Any}(
         :branch_size => branch_size,
         :branch_data => "ComponentType",
@@ -1493,6 +1509,8 @@ end
 #Plot network with colored feeders
 function plot_corall_grid(net_data, file_name, path_to_save,zoom = true, save = false  )
 
+    net_data["load"] = Dict()
+    
     feeder_ID_1, mv_busbar = get_feeder_data(net_data, file_name)
     title  = replace(file_name, "Official_"=>"")
     title = uppercasefirst(replace(title,".m" =>""))
@@ -1531,8 +1549,8 @@ function plot_corall_grid(net_data, file_name, path_to_save,zoom = true, save = 
     @set! plot.title = title
     @set! plot.resolve.scale.color=:shared
     
-    plot.layer[1]["encoding"]["color"]["title"]="Feeders"
-    plot.layer[1]["encoding"]["color"]["legend"]=Dict("clipHeight"=>50, "type" => "symbol", "labelFontSize"=>10, "symbolType" => "circle", "symbolSize" => 1000)
+    plot.layer[1]["layer"][1]["encoding"]["color"]["title"]="Feeders"
+    plot.layer[1]["layer"][1]["encoding"]["color"]["legend"]=Dict("clipHeight"=>50, "type" => "symbol", "labelFontSize"=>10, "symbolType" => "circle", "symbolSize" => 1000)
     if zoom 
         PowerPlots.Experimental.add_zoom!(plot)
     end
